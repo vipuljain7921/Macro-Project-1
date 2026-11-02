@@ -175,7 +175,7 @@ def run_training(n_samples: int = 10000, save_csv: bool = True) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("\n" + "═" * 60)
-    print("  🛡️  ChurnGuard AI  –  Model Training Pipeline")
+    print("  ChurnGuard AI  –  Model Training Pipeline")
     print("═" * 60 + "\n")
 
     results = run_training(n_samples=10000)

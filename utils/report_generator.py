@@ -4,7 +4,7 @@ Generates a professional single-page prediction report using ReportLab.
 """
 
 from __future__ import annotations
-import io, datetime
+import io, datetime, os
 from typing import List, Dict
 
 from reportlab.lib.pagesizes import A4
@@ -12,11 +12,14 @@ from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable, KeepTogether,
+    HRFlowable, KeepTogether, Image as ReportImage,
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
+SHIELD_ICON = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), "assets", "churnguard-shield.png"
+)
 
 # ── Brand colours ─────────────────────────────────────────────────────────────
 C_DARK   = colors.HexColor("#0a0f1e")
@@ -99,12 +102,14 @@ def generate_pdf_report(
 
     # ── Header Banner ────────────────────────────────────────────────────
     header_data = [[
-        Paragraph("🛡️ ChurnGuard AI", S["Title"]),
+        ReportImage(SHIELD_ICON, width=14 * mm, height=14 * mm * 672 / 568),
+        Paragraph("ChurnGuard AI", S["Title"]),
     ]]
-    header_tbl = Table(header_data, colWidths=[W])
+    header_tbl = Table(header_data, colWidths=[20 * mm, W - 20 * mm])
     header_tbl.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), C_DARK),
         ("ROWPADDING", (0, 0), (-1, -1), 12),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ROUNDEDCORNERS", [8]),
     ]))
     story.append(header_tbl)
@@ -243,7 +248,7 @@ def generate_pdf_report(
     story.append(HRFlowable(width=W, color=colors.HexColor("#e2e8f0"), thickness=0.8))
     story.append(Spacer(1, 2 * mm))
     story.append(Paragraph(
-        "🛡️ ChurnGuard AI  ·  AI-Powered Banking Intelligence Platform  ·  "
+        "ChurnGuard AI  ·  AI-Powered Banking Intelligence Platform  ·  "
         "For authorised internal use only  ·  © 2024",
         S["Footer"],
     ))

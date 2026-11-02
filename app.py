@@ -86,11 +86,34 @@ html, body, .stApp {
 }
 
 /* ── Hide Streamlit Chrome ── */
-#MainMenu, footer, header,
-[data-testid="stToolbar"],
+#MainMenu, footer,
 [data-testid="stDecoration"],
-[data-testid="stStatusWidget"] { display: none !important; }
-[data-testid="collapsedControl"] { display: none !important; }
+[data-testid="stStatusWidget"],
+[data-testid="stAppDeployButton"] { display: none !important; }
+
+[data-testid="stToolbar"] { pointer-events: none !important; }
+
+[data-testid="stExpandSidebarButton"] {
+  display: flex !important;
+  width: 2.5rem !important;
+  min-width: 2.5rem !important;
+  height: 2.5rem !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--fg) !important;
+  background: var(--bg2) !important;
+  border: 1px solid var(--bdr) !important;
+  border-radius: 8px !important;
+  pointer-events: auto !important;
+}
+[data-testid="stExpandSidebarButton"] [data-testid="stIconMaterial"] {
+  display: none !important;
+}
+[data-testid="stExpandSidebarButton"]::after {
+  content: "☰";
+  font-size: 1.1rem;
+  line-height: 1;
+}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -103,7 +126,11 @@ html, body, .stApp {
   background: linear-gradient(180deg, #060b16 0%, #0a1220 100%) !important;
   border-right: 1px solid var(--bdr) !important;
 }
-[data-testid="stSidebar"] > div:first-child { padding-top: 0 !important; }
+[data-testid="stSidebar"] > div:first-child {
+  max-height: 100vh !important;
+  overflow-y: auto !important;
+  padding-top: 0 !important;
+}
 [data-testid="stSidebar"] .stRadio > div { gap: 0.08rem !important; }
 [data-testid="stSidebar"] .stRadio label {
   font-family: var(--font-b) !important;
@@ -117,6 +144,8 @@ html, body, .stApp {
   display: flex !important;
   align-items: center !important;
   gap: 0.5rem !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
 }
 [data-testid="stSidebar"] .stRadio label:hover {
   color: var(--fg) !important;
@@ -374,7 +403,15 @@ details > summary {
 
 /* ── Sidebar Active Nav ── */
 [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
-  width: 100% !important; box-sizing: border-box !important;
+  width: 100% !important; min-height: 44px !important;
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 640px) {
+  [data-testid="stSidebar"] .stRadio label {
+    font-size: 0.9rem !important;
+    padding: 0.65rem 0.75rem !important;
+  }
 }
 
 /* ── Progress/Spinner ── */
@@ -509,9 +546,11 @@ def kpi_card(icon, value, label, color="#00d4ff", sub=""):
 #  LOGIN / SIGNUP
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_login():
+    logo_columns = st.columns([1, 2, 1])
+    with logo_columns[1]:
+        st.image(SHIELD_ICON, width=64)
     st.markdown("""
 <div style="text-align:center;padding:1rem 0 0">
-  <div style="font-size:3.5rem;margin-bottom:0.3rem">🛡️</div>
   <div style="font-family:'Outfit',sans-serif;font-size:2rem;font-weight:900;
        background:linear-gradient(135deg,#00d4ff,#7c3aed);
        -webkit-background-clip:text;-webkit-text-fill-color:transparent">
@@ -569,11 +608,12 @@ def page_login():
 #  EXECUTIVE OVERVIEW (Home)
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_overview(df):
-    st.markdown("""
+    logo_col, title_col = st.columns([0.55, 9.45])
+    with logo_col:
+        st.image(SHIELD_ICON, width=54)
+    with title_col:
+        st.markdown("""
 <div class='page-content' style="margin-bottom:1.4rem">
-  <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.3rem">
-    <div style="font-size:2.2rem">🛡️</div>
-    <div>
       <div style="font-family:'Outfit',sans-serif;font-size:1.6rem;font-weight:800;
            background:linear-gradient(135deg,#00d4ff,#7c3aed);
            -webkit-background-clip:text;-webkit-text-fill-color:transparent">
@@ -583,8 +623,6 @@ def page_overview(df):
         <span class='live-dot'></span>
         Live System · All Models Operational
       </div>
-    </div>
-  </div>
 </div>""", unsafe_allow_html=True)
 
     # ── KPI Row ───────────────────────────────────────────────────────────────
@@ -1076,7 +1114,11 @@ def page_ai_assistant(df, model, scaler, feature_names, best_name):
             if msg["role"] == "user":
                 st.markdown(f"<div class='chat-lbl'>👤 You</div><div class='chat-user'>{msg['content']}</div>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<div class='chat-lbl'>🛡️ ChurnGuard AI</div><div class='chat-ai'>{msg['content']}</div>", unsafe_allow_html=True)
+                logo_col, message_col = st.columns([0.3, 4.7])
+                with logo_col:
+                    st.image(SHIELD_ICON, width=20)
+                with message_col:
+                    st.markdown(f"<div class='chat-lbl'>ChurnGuard AI</div><div class='chat-ai'>{msg['content']}</div>", unsafe_allow_html=True)
 
         ui = st.text_input("Message", placeholder="Ask about churn, customers, or retention…",
                            label_visibility="collapsed", key="ci")
@@ -1390,9 +1432,13 @@ def build_sidebar(best_name):
 
 
 def render_footer():
-    st.markdown("""
+    logo_col, footer_col = st.columns([0.4, 9.6])
+    with logo_col:
+        st.image(SHIELD_ICON, width=20)
+    with footer_col:
+        st.markdown("""
 <div class="cg-footer">
-  🛡️ ChurnGuard AI &nbsp;·&nbsp; Customer Retention Dashboard<br>
+  ChurnGuard AI &nbsp;·&nbsp; Customer Retention Dashboard<br>
   <span style="font-size:0.66rem">Customer insights and retention support &nbsp;·&nbsp; © 2024</span>
 </div>""", unsafe_allow_html=True)
 
