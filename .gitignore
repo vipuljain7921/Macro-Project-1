@@ -10,4 +10,5 @@ __pycache__/
 !.env.example
 .streamlit/secrets.toml
 ChurnZero_Predictions.csv
+users.json
 "{data,models,utils,.streamlit,assets}/"

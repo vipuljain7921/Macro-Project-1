@@ -1,14 +1,18 @@
 [theme]
-primaryColor = "#00d4ff"
-backgroundColor = "#0a0f1e"
-secondaryBackgroundColor = "#0d1530"
-textColor = "#e8eaf6"
-font = "sans serif"
+primaryColor       = "#00d4ff"
+backgroundColor    = "#080d1a"
+secondaryBackgroundColor = "#0e1628"
+textColor          = "#e8f0ff"
+font               = "sans serif"
 
 [server]
-maxUploadSize = 200
-enableCORS = false
-port = 8501
+maxUploadSize      = 200
+enableCORS         = false
+port               = 8501
+headless           = false
 
 [browser]
-gatherUsageStats = false
+gatherUsageStats   = false
+
+[client]
+showSidebarNavigation = false
