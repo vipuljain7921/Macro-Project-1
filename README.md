@@ -1,237 +1,147 @@
-# 🛡️ ChurnGuard AI
-### AI-Powered Banking Churn Prediction & Customer Retention System
+# ChurnGuard AI
 
-> **Hackathon-Ready · Production-Style · Premium UI/UX**
+ChurnGuard AI is a Streamlit dashboard for exploring synthetic banking customer data, estimating individual churn risk, and reviewing retention actions. It combines a trained classification model with customer segmentation and interactive portfolio summaries.
 
----
+## Project Overview
 
-## 📌 Project Overview
+Banks need a practical way to identify customers who may leave and decide where retention outreach may be useful. This project demonstrates a workflow for exploring customer churn data, checking an individual customer's risk, and reviewing suggested follow-up actions in one dashboard.
 
-**ChurnGuard AI** is a full-stack machine learning product that predicts banking customer churn, visualises risk at scale, and automatically generates personalised retention strategies — all delivered through a stunning, interactive Streamlit dashboard.
+The included dataset contains 10,000 synthetic customer records. It is generated for this project and does not represent real customer accounts.
 
-| Attribute        | Detail                                      |
-|-----------------|---------------------------------------------|
-| **Domain**       | FinTech · Customer Intelligence             |
-| **Tech Stack**   | Python · Streamlit · Scikit-learn · Plotly  |
-| **ML Models**    | LR · Decision Tree · Random Forest · XGBoost |
-| **Dataset Size** | 10,000 synthetic banking customer records   |
-| **UI Theme**     | Glassmorphism · Dark fintech aesthetic      |
+## Current Features
 
----
+- **Overview:** Portfolio totals, churn and retention rates, active-member share, average balance, churn distribution, and churn rate by geography.
+- **Customer risk check:** Enter customer and account details or generate a sample profile. The app displays a churn-probability gauge, risk category, customer group, suggested retention strategies, and an action plan.
+- **Customer intelligence:** Search and filter records by geography, churn status, age range, card type, and customer ID; export filtered records to CSV.
+- **Churn insights:** Compare churn rates by number of products and account activity.
+- **Customer groups:** Review five K-means customer segments, their sizes and churn rates, and a suggested action for each group.
+- **Customer insights:** View data-derived portfolio observations. An optional chat assistant can be enabled by installing the Anthropic SDK and supplying an API key in the dashboard.
+- **Recent checks:** Review predictions made during the current session, view the risk-level distribution after at least three checks, and export the history as CSV or JSON.
+- **Smart alerts:** Review and dismiss alerts based on churn rates and customer groups in the dataset.
+- **Administrator tools:** Manage user accounts, view dataset and model-registry summaries, and change the current user's password.
+- **Reports:** Download an individual prediction as JSON or PDF.
 
-## 🚀 Quick Start
+## Models and Data Processing
 
-### 1. Clone & Install
-```bash
-git clone https://github.com/your-username/ChurnGuard-AI.git
-cd ChurnGuard-AI
-pip install -r requirements.txt
+The training pipeline generates the synthetic dataset, preprocesses customer attributes, creates derived features, and splits the data into training and test sets. It trains Decision Tree, Random Forest, and XGBoost classifiers when XGBoost is available. Model results include standard classification metrics, and the pipeline selects the saved model by ROC-AUC.
+
+Preprocessing encodes categorical fields, one-hot encodes geography, and derives features such as balance-to-salary ratio, products per tenure, engagement score, credit band, high-balance flag, and senior-customer flag. The segmentation module uses K-means clustering on customer and account attributes.
+
+## Dashboard Charts
+
+The current dashboard includes:
+
+- A donut chart for retained versus churned customers.
+- A bar chart for churn rate by geography.
+- A gauge for an individual customer's predicted churn probability.
+- Bar charts comparing churn rates by products held and account activity.
+- A donut chart showing recent prediction risk levels after three or more checks.
+
+## Technology Stack
+
+- **Python 3.10 or later**
+- **Streamlit** for the dashboard
+- **Pandas and NumPy** for data handling
+- **scikit-learn** for preprocessing, classification, and K-means clustering
+- **XGBoost** for gradient-boosted classification
+- **Plotly** for interactive charts
+- **Joblib and pickle** for saved model and result artifacts
+- **ReportLab** for downloadable PDF reports
+- **Anthropic SDK (optional)** for the chat assistant
+
+Package requirements are listed in [`requirements.txt`](requirements.txt). The optional Anthropic SDK is not included in that file.
+
+## Project Structure
+
+```text
+ChurnGuard-AI/
+├── app.py                         # Streamlit dashboard and page rendering
+├── train_model.py                 # Dataset generation and model training
+├── requirements.txt               # Python package requirements
+├── README.md
+├── .streamlit/
+│   └── config.toml                # Streamlit theme and server settings
+├── data/
+│   ├── __init__.py
+│   ├── generate_data.py           # Synthetic customer-data generator
+│   └── banking_churn_data.csv     # Included synthetic dataset
+├── models/
+│   ├── best_model.pkl             # Selected classifier
+│   ├── scaler.pkl                 # Fitted feature scaler
+│   ├── feature_names.pkl          # Model input feature order
+│   ├── best_model_name.pkl
+│   ├── training_results.pkl       # Saved evaluation results
+│   └── seg_*.pkl                  # Customer segmentation artifacts
+└── utils/
+    ├── __init__.py
+    ├── auth.py                    # File-backed account and role helpers
+    ├── data_utils.py              # Encoding and feature engineering
+    ├── model_utils.py             # Model loading and prediction helpers
+    ├── report_generator.py        # PDF report generation
+    ├── retention_engine.py        # Risk categories and suggested actions
+    └── segmentation.py            # Customer segmentation
 ```
 
-### 2. Train Models
-```bash
-python train_model.py
-```
-This will:
-- Generate a synthetic 10,000-record banking dataset
-- Train Logistic Regression, Decision Tree, Random Forest, and XGBoost
-- Save the best model (by AUC-ROC) and all artifacts to `models/`
+## Installation
 
-### 3. Launch Dashboard
+Open a terminal in the project directory and run:
+
+```bash
+python -m venv .venv
+```
+
+Activate the virtual environment:
+
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+```
+
+```bash
+# macOS or Linux
+source .venv/bin/activate
+```
+
+Install the project dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+## Run the Dashboard
+
+Start the app from the project directory:
+
 ```bash
 streamlit run app.py
 ```
 
-Open [http://localhost:8501](http://localhost:8501) in your browser.
+Streamlit prints a local URL in the terminal; open it in a browser. The repository includes the dataset and saved model artifacts. If the model, scaler, or feature-name artifacts are missing, the app runs the training pipeline; if the dataset is missing, it generates a replacement dataset.
 
-**Demo Login Credentials:**
-| Username | Password    | Role       |
-|----------|-------------|------------|
-| `admin`  | `admin123`  | Administrator |
-| `demo`   | `demo2024`  | Analyst    |
+To regenerate the dataset and retrain the models manually:
 
----
-
-## 🗂️ Project Structure
-
-```
-ChurnGuard-AI/
-├── app.py                    # ← Main Streamlit dashboard
-├── train_model.py            # ← ML training pipeline
-├── requirements.txt
-├── README.md
-│
-├── .streamlit/
-│   └── config.toml           # Streamlit theme config
-│
-├── data/
-│   ├── __init__.py
-│   ├── generate_data.py      # Synthetic dataset generator
-│   └── banking_churn_data.csv  # (created at runtime)
-│
-├── models/                   # (created at runtime)
-│   ├── best_model.pkl
-│   ├── scaler.pkl
-│   ├── feature_names.pkl
-│   ├── best_model_name.pkl
-│   ├── training_results.pkl
-│   └── *.pkl                 # Individual model files
-│
-└── utils/
-    ├── __init__.py
-    ├── data_utils.py         # Preprocessing & feature engineering
-    ├── model_utils.py        # Model loading & prediction helpers
-    ├── retention_engine.py   # AI retention strategy generator
-    ├── segmentation.py       # Customer clustering and segment summaries
-    ├── report_generator.py   # PDF prediction reports
-    └── auth.py               # Demo authentication
+```bash
+python train_model.py
 ```
 
----
+New users can be registered through the sign-in screen. Accounts and roles are stored in the local `users.json` file; file-backed account data may not persist on hosting platforms with ephemeral storage.
 
-## 🧠 ML Pipeline
+### Optional chat assistant
 
-```
-Raw Data → Preprocessing → Feature Engineering → Train/Test Split (80/20)
-    ↓
-Multiple ML Models trained simultaneously
-    ↓
-Evaluation: Accuracy · Precision · Recall · F1 · AUC-ROC
-    ↓
-Best Model selected by AUC-ROC → Saved to disk
-    ↓
-Streamlit App loads saved model for real-time inference
+To enable the Anthropic-powered assistant, install its SDK separately and enter an API key in the Customer Insights page:
+
+```bash
+python -m pip install anthropic
 ```
 
-### Feature Engineering
-| Engineered Feature   | Formula                                              |
-|---------------------|------------------------------------------------------|
-| `BalanceToSalary`   | `Balance / (EstimatedSalary + 1)`                   |
-| `ProductsPerTenure` | `NumOfProducts / (Tenure + 1)`                      |
-| `EngagementScore`   | `IsActive + OnlineBanking + TxFreq/30`              |
-| `CreditBand`        | `(CreditScore - 300) / 550`                         |
-| `HighBalance`       | `1 if Balance > median else 0`                      |
-| `SeniorCustomer`    | `1 if Age > 55 else 0`                              |
+The key is held in the current Streamlit session.
 
----
+## Future Scope
 
-## 📊 Dashboard Pages
+- Add persistent database storage for customer and account data.
+- Provide an API for serving predictions to other applications.
+- Add model monitoring and a documented evaluation workflow for new data.
+- Explore model-explanation tools to help users understand individual predictions.
+- Add automated tests for preprocessing, model loading, and dashboard workflows.
 
-| Page | Description |
-|------|-------------|
-| 🏠 **Home** | KPI cards, churn overview, quick analytics, feature grid |
-| 🔮 **Predict** | Customer input form, churn probability gauge, risk badge, retention strategies, action plan |
-| 📊 **Analytics** | 10+ interactive Plotly charts — geography, demographics, behaviour, financials |
-| 🧩 **Segmentation** | K-Means segments, customer counts, and segment churn rates |
-| 🏆 **Model Performance** | ROC curves, confusion matrix, metric comparison, feature importance |
-| 📂 **Dataset Explorer** | Filterable data table, descriptive statistics, CSV export |
-| 📋 **History** | Session-level prediction audit log with CSV export |
-| 🤖 **AI Chatbot** | Natural-language assistance for churn and retention questions |
-
----
-
-## 🎯 Retention Strategy Engine
-
-Strategies are generated based on the customer's churn probability and specific attributes:
-
-| Trigger | Strategy |
-|---------|----------|
-| High Risk (>60%) | Emergency retention package + dedicated RM |
-| Medium Risk (30-60%) | Loyalty rewards + reduced loan interest |
-| Inactive member | Digital banking activation bonus |
-| Single product | Cross-sell bundle offer |
-| Low balance | High-yield savings account invitation |
-| No online banking | Digital onboarding campaign |
-| Low Risk (<30%) | Loyalty appreciation + anniversary rewards |
-
----
-
-## 📦 Dataset Features
-
-| Feature | Type | Description |
-|---------|------|-------------|
-| CustomerID | ID | Unique customer identifier |
-| Age | Numeric | Customer age (18–78) |
-| Gender | Categorical | Male / Female |
-| Geography | Categorical | France / Germany / Spain |
-| CreditScore | Numeric | 300–850 |
-| Balance | Numeric | Account balance |
-| EstimatedSalary | Numeric | Annual salary estimate |
-| NumOfProducts | Numeric | 1–4 bank products |
-| Tenure | Numeric | Years as customer (0–10) |
-| IsActiveMember | Binary | 0/1 |
-| TransactionFrequency | Numeric | Monthly transactions |
-| AccountActivity | Ordinal | Low / Medium / High |
-| CardType | Categorical | Silver / Gold / Platinum / Diamond |
-| OnlineBankingUsage | Binary | 0/1 |
-| HasLoan | Binary | 0/1 |
-| **Churn** | **Target** | 0 = Retained, 1 = Churned |
-
----
-
-## ☁️ Deploy to Streamlit Cloud
-
-1. Push this repo to GitHub (ensure `models/` is **not** in `.gitignore`)
-2. Go to [share.streamlit.io](https://share.streamlit.io)
-3. Connect your GitHub repo → set **Main file path** to `app.py`
-4. Add any secrets if needed in **Streamlit Cloud → Settings → Secrets**
-5. Click **Deploy** ✅
-
-> **Note:** Add a `packages.txt` if you need system-level dependencies.
-
----
-
-## 🔮 Future Scope
-
-- [ ] **Real-time API endpoint** using FastAPI for model serving
-- [ ] **SHAP explainability** for individual prediction breakdowns
-- [ ] **Live database integration** (PostgreSQL / MongoDB)
-- [ ] **Email/SMS alerting** for high-risk customers
-- [ ] **AutoML pipeline** with Optuna hyperparameter optimisation
-- [ ] **Multi-bank multi-tenant** architecture
-- [ ] **A/B testing framework** for retention strategy effectiveness
-- [ ] **Deep learning model** (LSTM for sequence-based churn patterns)
-
----
-
-## 📝 PPT Presentation Outline
-
-1. **Title Slide** — ChurnGuard AI logo, tagline, team name
-2. **Problem Statement** — Customer churn costs banks $5.9T annually
-3. **Our Solution** — AI-powered prediction + retention in one platform
-4. **Architecture** — Data → ML Pipeline → Dashboard → Strategy Engine
-5. **Dataset & Features** — 10,000 records, 16 raw columns, 22 model features after encoding and engineering
-6. **ML Models & Results** — Model comparison table + ROC curve
-7. **Dashboard Demo** — Screenshots of each page
-8. **Retention Engine** — How strategies are generated
-9. **Business Impact** — ROI calculation, retention improvement %
-10. **Future Scope** — API, deep learning, multi-bank deployment
-11. **Team & Contact**
-
----
-
-## 👨‍💻 Tech Stack
-
-```
-Python 3.10+         → Core language
-Streamlit 1.28+      → Dashboard framework
-Scikit-learn 1.3+    → ML models & preprocessing
-XGBoost 2.0+         → Gradient boosted trees
-Pandas + NumPy       → Data manipulation
-Plotly 5.15+         → Interactive charts
-Seaborn + Matplotlib → Static visualisations
-Joblib               → Model serialisation
-ReportLab            → PDF prediction reports
-```
-
----
-
-## 📄 License
-
-MIT License — Free for educational and personal use.
-
----
-
-<div align="center">
-  <strong>🛡️ ChurnGuard AI</strong> · Built with ❤️ for innovation competitions & portfolio projects
-</div>
+These are possible future improvements and are not features of the current application.
