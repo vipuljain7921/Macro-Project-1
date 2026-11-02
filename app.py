@@ -16,6 +16,8 @@ import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
 
+SHIELD_ICON = os.path.join(os.path.dirname(__file__), "assets", "churnguard-shield.png")
+
 from utils.data_utils       import preprocess_single_customer, get_feature_display_names
 from utils.model_utils      import (models_exist, load_artifacts, load_training_results,
                                      predict_churn, get_feature_importances, generate_sample_customer)
@@ -35,7 +37,7 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="ChurnGuard AI",
-    page_icon="🛡️",
+    page_icon=SHIELD_ICON,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -1322,9 +1324,11 @@ def page_alerts(df):
 def build_sidebar(best_name):
     with st.sidebar:
         # Logo + Brand
+        logo_columns = st.columns(3)
+        with logo_columns[1]:
+            st.image(SHIELD_ICON, width=38)
         st.markdown("""
-<div style="text-align:center;padding:1.4rem 0 0.8rem">
-  <div style="font-size:2.4rem;margin-bottom:0.25rem">🛡️</div>
+<div style="text-align:center;padding:0 0 0.8rem">
   <div style="font-family:'Outfit',sans-serif;font-size:1.1rem;font-weight:800;
        background:linear-gradient(135deg,#00d4ff,#7c3aed);
        -webkit-background-clip:text;-webkit-text-fill-color:transparent">
