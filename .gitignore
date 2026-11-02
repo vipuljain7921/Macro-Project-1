@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+*.log
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+ChurnZero_Predictions.csv
+"{data,models,utils,.streamlit,assets}/"
