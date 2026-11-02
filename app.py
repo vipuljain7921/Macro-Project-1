@@ -15,7 +15,6 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
-from plotly.subplots import make_subplots
 
 from utils.data_utils       import preprocess_single_customer, get_feature_display_names
 from utils.model_utils      import (models_exist, load_artifacts, load_training_results,
@@ -458,13 +457,12 @@ def get_training_results():
 def get_seg_data(df):
     if not segmentation_exists():
         train_segmentation(df, n_clusters=5)
-    km, scaler, pca = load_segmentation()
+    km, scaler, _ = load_segmentation()
     X = df[SEG_FEATURES].copy().fillna(0)
     Xs = scaler.transform(X)
     labels = km.predict(Xs)
-    X_pca = pca.transform(Xs)
     summary = get_segment_summary(df, labels)
-    return labels, X_pca, summary
+    return summary
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -518,7 +516,7 @@ def page_login():
     ChurnGuard AI
   </div>
   <div style="color:#6b80a0;font-size:0.85rem;margin-top:0.3rem">
-    Banking Intelligence Platform
+    Customer Retention Dashboard
   </div>
 </div>""", unsafe_allow_html=True)
 
@@ -594,8 +592,6 @@ def page_overview(df):
     retained = total - churned
     active_pct = df["IsActiveMember"].mean()
     avg_bal = df["Balance"].mean()
-    high_risk_pct = (df["CreditScore"] < 500).mean()
-
     cols = st.columns(5)
     data = [
         ("👥", f"{total:,}",       "Total Customers",    "#00d4ff", ""),
@@ -625,8 +621,8 @@ def page_overview(df):
   </div>
 </div>""", unsafe_allow_html=True)
 
-    # ── Charts Row 1 ─────────────────────────────────────────────────────────
-    c1, c2, c3 = st.columns(3)
+    # ── Portfolio Snapshot ───────────────────────────────────────────────────
+    c1, c2 = st.columns(2)
     with c1:
         vals = [int((df["Churn"] == 0).sum()), int((df["Churn"] == 1).sum())]
         fig = go.Figure(go.Pie(
@@ -648,66 +644,12 @@ def page_overview(df):
         fig.update_coloraxes(showscale=False)
         st.plotly_chart(sf(fig, "🌍 Churn by Geography", 310), use_container_width=True)
 
-    with c3:
-        d2 = df.copy()
-        d2["AG"] = pd.cut(d2["Age"], [18, 25, 35, 45, 55, 65, 100],
-                          labels=["18-24","25-34","35-44","45-54","55-64","65+"], right=False)
-        ag = d2.groupby("AG", observed=True)["Churn"].mean().reset_index()
-        ag.columns = ["Group", "Rate"]
-        fig = px.area(ag, x="Group", y="Rate", color_discrete_sequence=["#00d4ff"])
-        fig.update_traces(line_width=2.5, fill="tozeroy",
-                          fillcolor="rgba(0,212,255,0.08)")
-        fig.add_hline(y=cr, line_dash="dot", line_color="#f59e0b",
-                      annotation_text=f"Avg {cr:.1%}", annotation_font_color="#f59e0b")
-        st.plotly_chart(sf(fig, "📈 Churn by Age Group", 310), use_container_width=True)
-
-    # ── Charts Row 2 ─────────────────────────────────────────────────────────
-    c1, c2 = st.columns([1.4, 1])
-    with c1:
-        pc = df.groupby("NumOfProducts")["Churn"].mean().reset_index()
-        pc.columns = ["Products", "Rate"]
-        tc = df.groupby("Tenure")["Churn"].mean().reset_index()
-        tc.columns = ["Tenure", "Rate"]
-        fig = make_subplots(rows=1, cols=2,
-                            subplot_titles=("by No. of Products", "by Tenure (yrs)"))
-        fig.add_trace(
-            go.Bar(x=pc["Products"].astype(str), y=pc["Rate"],
-                   marker_color=["#10b981","#f59e0b","#ef4444","#ef4444"][:len(pc)],
-                   text=pc["Rate"].map("{:.1%}".format), textposition="outside",
-                   textfont_color="#e8f0ff", showlegend=False),
-            row=1, col=1)
-        fig.add_trace(
-            go.Scatter(x=tc["Tenure"], y=tc["Rate"], mode="lines+markers",
-                       line_color="#7c3aed", line_width=2.5,
-                       marker=dict(size=7, color="#7c3aed"), showlegend=False),
-            row=1, col=2)
-        fig.update_layout(**_BASE_LAYOUT, height=320,
-                          title=dict(text="🔍 Churn Drivers Deep-Dive",
-                                     font=dict(family="Outfit,sans-serif", size=13, color="#e8f0ff")))
-        fig.update_yaxes(gridcolor="rgba(255,255,255,0.05)", zerolinecolor="rgba(255,255,255,0.07)")
-        fig.update_xaxes(gridcolor="rgba(255,255,255,0.05)")
-        st.plotly_chart(fig, use_container_width=True)
-
-    with c2:
-        cc = df.groupby("CardType")["Churn"].mean().reset_index().sort_values("Churn")
-        cc.columns = ["Card", "Rate"]
-        clrs = {"Silver":"#6b80a0","Gold":"#f59e0b","Platinum":"#7c3aed","Diamond":"#00d4ff"}
-        colors_list = [clrs.get(c, "#00d4ff") for c in cc["Card"]]
-        fig = go.Figure(go.Bar(
-            x=cc["Rate"], y=cc["Card"], orientation="h",
-            marker_color=colors_list,
-            text=cc["Rate"].map("{:.1%}".format), textposition="outside",
-            textfont_color="#e8f0ff",
-        ))
-        st.plotly_chart(sf(fig, "💳 Churn by Card Type", 320), use_container_width=True)
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 #  CHURN PREDICTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_predict(model, scaler, feature_names, best_name):
-    page_header("🔮", "Customer Churn Prediction")
-    st.caption("Fill the customer profile and click **Predict** for an AI-powered churn risk assessment.")
+    page_header("🔮", "Customer Risk Check")
+    st.caption("Enter a customer’s details to assess their likelihood of leaving and see retention suggestions.")
 
     col_a, col_b = st.columns([3, 1])
     with col_b:
@@ -718,7 +660,7 @@ def page_predict(model, scaler, feature_names, best_name):
     s = st.session_state.get("_sample", {})
 
     with st.form("predict_form"):
-        t1, t2, t3 = st.tabs(["👤 Demographics", "💰 Financials", "📱 Behaviour"])
+        t1, t2, t3 = st.tabs(["👤 Customer Details", "💰 Account Details", "📱 Engagement"])
 
         with t1:
             r1, r2, r3 = st.columns(3)
@@ -727,13 +669,13 @@ def page_predict(model, scaler, feature_names, best_name):
                 gender   = st.selectbox("Gender", ["Male","Female"],
                                index=0 if s.get("Gender","Male")=="Male" else 1)
             with r2:
-                geography = st.selectbox("Geography", ["France","Germany","Spain"],
+                geography = st.selectbox("Country", ["France","Germany","Spain"],
                                 index=["France","Germany","Spain"].index(s.get("Geography","France")))
                 card_type = st.selectbox("Card Type", ["Silver","Gold","Platinum","Diamond"],
                                 index=["Silver","Gold","Platinum","Diamond"].index(s.get("CardType","Gold")))
             with r3:
-                tenure      = st.slider("Tenure (Years)", 0, 10, int(s.get("Tenure", 3)))
-                num_products = st.selectbox("Number of Products", [1,2,3,4],
+                tenure      = st.slider("Years with Bank", 0, 10, int(s.get("Tenure", 3)))
+                num_products = st.selectbox("Products Held", [1,2,3,4],
                                    index=int(s.get("NumOfProducts",2))-1)
 
         with t2:
@@ -741,13 +683,13 @@ def page_predict(model, scaler, feature_names, best_name):
             with f1: credit_score = st.slider("Credit Score", 300, 850, int(s.get("CreditScore", 650)))
             with f2: balance = st.number_input("Account Balance ($)", 0.0, 300_000.0,
                                    float(s.get("Balance", 80_000.0)), step=1_000.0)
-            with f3: salary = st.number_input("Estimated Salary ($)", 10_000.0, 200_000.0,
+            with f3:             salary = st.number_input("Estimated Annual Income ($)", 10_000.0, 200_000.0,
                                   float(s.get("EstimatedSalary", 100_000.0)), step=1_000.0)
 
         with t3:
             b1, b2, b3 = st.columns(3)
             with b1:
-                is_active      = st.selectbox("Active Member", ["Yes","No"],
+                is_active      = st.selectbox("Uses Account Regularly", ["Yes","No"],
                                      index=0 if s.get("IsActiveMember",1)==1 else 1)
                 online_banking = st.selectbox("Online Banking", ["Yes","No"],
                                      index=0 if s.get("OnlineBankingUsage",1)==1 else 1)
@@ -759,7 +701,7 @@ def page_predict(model, scaler, feature_names, best_name):
                 has_loan = st.selectbox("Has Active Loan", ["Yes","No"],
                                index=0 if s.get("HasLoan",0)==1 else 1)
 
-        submitted = st.form_submit_button("⚡  Predict Churn Risk", use_container_width=True)
+        submitted = st.form_submit_button("⚡  Check Customer Risk", use_container_width=True)
 
     if submitted:
         customer = {
@@ -812,23 +754,25 @@ def page_predict(model, scaler, feature_names, best_name):
             st.plotly_chart(fig, use_container_width=True)
 
             rc_cls = {"High Risk":"risk-high","Medium Risk":"risk-medium","Low Risk":"risk-low"}[risk_cat]
+            risk_label = {"High Risk":"High likelihood","Medium Risk":"Moderate likelihood",
+                          "Low Risk":"Low likelihood"}[risk_cat]
             st.markdown(
                 f"<div style='text-align:center;margin-top:-0.4rem'>"
-                f"<span class='risk-badge {rc_cls}'>{risk_emoji} {risk_cat}</span></div>",
+                f"<span class='risk-badge {rc_cls}'>{risk_emoji} {risk_label}</span></div>",
                 unsafe_allow_html=True
             )
             st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
             m1, m2, m3 = st.columns(3)
-            m1.markdown(f"<div class='mp'><div class='mv'>{prob:.0%}</div><div class='ml'>Churn Prob</div></div>", unsafe_allow_html=True)
-            m2.markdown(f"<div class='mp'><div class='mv'>{'YES' if label else 'NO'}</div><div class='ml'>Prediction</div></div>", unsafe_allow_html=True)
-            m3.markdown(f"<div class='mp'><div class='mv'>{(1-prob):.0%}</div><div class='ml'>Retention</div></div>", unsafe_allow_html=True)
+            m1.markdown(f"<div class='mp'><div class='mv'>{prob:.0%}</div><div class='ml'>Likelihood to Leave</div></div>", unsafe_allow_html=True)
+            m2.markdown(f"<div class='mp'><div class='mv'>{'YES' if label else 'NO'}</div><div class='ml'>May Leave</div></div>", unsafe_allow_html=True)
+            m3.markdown(f"<div class='mp'><div class='mv'>{(1-prob):.0%}</div><div class='ml'>Likely to Stay</div></div>", unsafe_allow_html=True)
             st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
             st.markdown(f"""
 <div class="cg-card" style="text-align:center;padding:0.85rem">
   <div style="font-size:1.3rem">{seg_meta['icon']}</div>
   <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:0.85rem;
        color:{seg_meta['color']};margin:0.15rem 0">{seg_meta['name']}</div>
-  <div style="font-size:0.7rem;color:#6b80a0">Customer Segment</div>
+  <div style="font-size:0.7rem;color:#6b80a0">Customer Group</div>
 </div>""", unsafe_allow_html=True)
 
         with right:
@@ -863,7 +807,7 @@ def page_predict(model, scaler, feature_names, best_name):
                         colorscale=[[0,"#7c3aed"],[1,"#00d4ff"]],
                     )
                 ))
-                st.plotly_chart(sf(fig, "🔍 Top Risk Factors (Feature Importance)", 290), use_container_width=True)
+                st.plotly_chart(sf(fig, "What Raises This Customer’s Risk", 290), use_container_width=True)
 
         # Action Plan
         ap_color  = {"High Risk":"rgba(239,68,68,0.1)","Medium Risk":"rgba(245,158,11,0.08)","Low Risk":"rgba(16,185,129,0.08)"}[risk_cat]
@@ -909,8 +853,8 @@ def page_predict(model, scaler, feature_names, best_name):
 #  CUSTOMER INTELLIGENCE
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_customer_intelligence(df, model, scaler, feature_names):
-    page_header("🔍", "Customer Intelligence")
-    st.caption("Search, filter, and drill into individual customer profiles.")
+    page_header("🔍", "Customer Search")
+    st.caption("Find customer records and review the account details that matter.")
 
     with st.expander("🔎  Filters & Search", expanded=True):
         fc1, fc2, fc3, fc4 = st.columns(4)
@@ -918,15 +862,15 @@ def page_customer_intelligence(df, model, scaler, feature_names):
             geo_f = st.multiselect("Geography", df["Geography"].unique().tolist(),
                                    default=df["Geography"].unique().tolist())
         with fc2:
-            ch_f = st.multiselect("Churn Status", [0,1], default=[0,1],
-                                   format_func=lambda x: "Churned" if x else "Retained")
+            ch_f = st.multiselect("Customer Status", [0,1], default=[0,1],
+                                   format_func=lambda x: "Left" if x else "Stayed")
         with fc3:
             age_r = st.slider("Age Range", int(df["Age"].min()), int(df["Age"].max()),
                               (int(df["Age"].min()), int(df["Age"].max())))
         with fc4:
             risk_f = st.multiselect("Card Type", df["CardType"].unique().tolist(),
                                     default=df["CardType"].unique().tolist())
-        sid = st.text_input("Search Customer ID", placeholder="e.g. CG0000123")
+        sid = st.text_input("Customer ID", placeholder="e.g. CG0000123")
 
     mask = (
         df["Geography"].isin(geo_f) &
@@ -941,12 +885,13 @@ def page_customer_intelligence(df, model, scaler, feature_names):
     # KPI strip
     churn_rate = f"{filtered['Churn'].mean():.2%}" if not filtered.empty else "—"
     avg_bal    = f"${filtered['Balance'].mean():,.0f}" if not filtered.empty else "—"
+    active_rate = f"{filtered['IsActiveMember'].mean():.1%}" if not filtered.empty else "—"
     cols = st.columns(4)
     data = [
-        ("Filtered Customers", f"{len(filtered):,}", "#00d4ff"),
-        ("Filtered Churn Rate",  churn_rate,           "#ef4444"),
-        ("Avg Balance",         avg_bal,               "#f59e0b"),
-        ("Missing Values",      str(filtered.isnull().sum().sum()), "#10b981"),
+        ("Customers Found", f"{len(filtered):,}", "#00d4ff"),
+        ("Customers Who Left", churn_rate, "#ef4444"),
+        ("Average Balance", avg_bal, "#f59e0b"),
+        ("Active Accounts", active_rate, "#10b981"),
     ]
     for col, (lbl, val, clr) in zip(cols, data):
         col.markdown(
@@ -960,10 +905,12 @@ def page_customer_intelligence(df, model, scaler, feature_names):
     display_cols = ["CustomerID","Age","Gender","Geography","CardType","Balance",
                     "NumOfProducts","Tenure","IsActiveMember","Churn"]
     display_df = filtered[[c for c in display_cols if c in filtered.columns]].head(300)
+    display_df = display_df.rename(columns={
+        "CustomerID": "Customer ID", "CardType": "Card", "Balance": "Account Balance",
+        "NumOfProducts": "Products", "Tenure": "Years with Bank",
+        "IsActiveMember": "Active Account", "Churn": "Status",
+    })
     st.dataframe(display_df, use_container_width=True, height=400)
-
-    with st.expander("📈  Descriptive Statistics"):
-        st.dataframe(filtered.describe().T.round(3), use_container_width=True)
 
     st.download_button(
         "⬇️  Download Filtered Data (CSV)",
@@ -978,285 +925,62 @@ def page_customer_intelligence(df, model, scaler, feature_names):
 #  ANALYTICS
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_analytics(df):
-    page_header("📊", "Customer Analytics")
-    st.caption("Key churn drivers across products, activity, card type, geography, and tenure.")
+    page_header("📊", "Churn Insights")
+    st.caption("Simple comparisons to help focus customer retention efforts.")
 
-    t1, t2, t3 = st.tabs(["📦 Products & Activity", "🌍 Geography & Card", "📅 Trends"])
-
-    with t1:
-        c1, c2 = st.columns(2)
-        with c1:
-            pc = df.groupby("NumOfProducts")["Churn"].mean().reset_index()
-            pc.columns = ["Products","Rate"]
-            fig = px.bar(pc, x="Products", y="Rate", color="Rate",
-                         color_continuous_scale=["#10b981","#f59e0b","#ef4444"],
-                         text=pc["Rate"].map("{:.1%}".format))
-            fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
-            fig.update_coloraxes(showscale=False)
-            st.plotly_chart(sf(fig,"Churn Rate by Number of Products"), use_container_width=True)
-        with c2:
-            ac = df.groupby("IsActiveMember")["Churn"].mean().reset_index()
-            ac["Label"] = ac["IsActiveMember"].map({0:"Inactive",1:"Active"})
-            fig = px.bar(ac, x="Label", y="Churn", color="Label",
-                         color_discrete_map={"Active":"#10b981","Inactive":"#ef4444"},
-                         text=ac["Churn"].map("{:.1%}".format))
-            fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
-            fig.update_layout(showlegend=False)
-            st.plotly_chart(sf(fig,"Active vs Inactive Churn Rate"), use_container_width=True)
-
-        c1, c2 = st.columns(2)
-        with c1:
-            on = df.groupby("OnlineBankingUsage")["Churn"].mean().reset_index()
-            on["Label"] = on["OnlineBankingUsage"].map({0:"No Online Banking",1:"Uses Online Banking"})
-            fig = px.bar(on, x="Label", y="Churn", color="Label",
-                         color_discrete_map={"No Online Banking":"#ef4444","Uses Online Banking":"#10b981"},
-                         text=on["Churn"].map("{:.1%}".format))
-            fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
-            fig.update_layout(showlegend=False)
-            st.plotly_chart(sf(fig,"Online Banking vs Churn"), use_container_width=True)
-        with c2:
-            loan = df.groupby("HasLoan")["Churn"].mean().reset_index() if "HasLoan" in df.columns else None
-            if loan is not None:
-                loan["Label"] = loan["HasLoan"].map({0:"No Loan",1:"Has Loan"})
-                fig = px.bar(loan, x="Label", y="Churn", color="Label",
-                             color_discrete_map={"No Loan":"#7c3aed","Has Loan":"#f97316"},
-                             text=loan["Churn"].map("{:.1%}".format))
-                fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
-                fig.update_layout(showlegend=False)
-                st.plotly_chart(sf(fig,"Loan Holders vs Churn"), use_container_width=True)
-
-    with t2:
-        c1, c2 = st.columns(2)
-        with c1:
-            geo = df.groupby("Geography")["Churn"].mean().reset_index()
-            fig = px.bar(geo, x="Geography", y="Churn", color="Churn",
-                         color_continuous_scale=["#10b981","#f59e0b","#ef4444"],
-                         text=geo["Churn"].map("{:.1%}".format))
-            fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
-            fig.update_coloraxes(showscale=False)
-            st.plotly_chart(sf(fig,"Churn Rate by Geography"), use_container_width=True)
-        with c2:
-            cc = df.groupby("CardType")["Churn"].mean().reset_index().sort_values("Churn")
-            cc.columns = ["Card","Rate"]
-            fig = px.bar(cc, x="Card", y="Rate", color_discrete_sequence=["#7c3aed"],
-                         text=cc["Rate"].map("{:.1%}".format))
-            fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
-            st.plotly_chart(sf(fig,"Churn Rate by Card Type"), use_container_width=True)
-
-        # Balance distribution
-        fig = go.Figure()
-        fig.add_trace(go.Histogram(x=df[df["Churn"]==0]["Balance"], name="Retained",
-                                   marker_color="rgba(16,185,129,0.7)", nbinsx=40, opacity=0.8))
-        fig.add_trace(go.Histogram(x=df[df["Churn"]==1]["Balance"], name="Churned",
-                                   marker_color="rgba(239,68,68,0.7)", nbinsx=40, opacity=0.8))
-        fig.update_layout(**_BASE_LAYOUT, barmode="overlay", height=300,
-                          title=dict(text="Balance Distribution: Retained vs Churned",
-                                     font=dict(family="Outfit,sans-serif", size=13, color="#e8f0ff")))
-        st.plotly_chart(fig, use_container_width=True)
-
-    with t3:
-        c1, c2 = st.columns(2)
-        with c1:
-            tc = df.groupby("Tenure")["Churn"].mean().reset_index()
-            tc.columns = ["Tenure","Rate"]
-            fig = px.bar(tc, x="Tenure", y="Rate", color="Rate",
-                         color_continuous_scale=["#10b981","#f59e0b","#ef4444"],
-                         text=tc["Rate"].map("{:.1%}".format))
-            fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
-            fig.update_coloraxes(showscale=False)
-            st.plotly_chart(sf(fig,"Churn Rate by Tenure (Years)"), use_container_width=True)
-        with c2:
-            ac_lvl = df.groupby("AccountActivity")["Churn"].mean().reset_index() if "AccountActivity" in df.columns else None
-            if ac_lvl is not None:
-                ac_lvl.columns = ["Activity","Rate"]
-                clr_map = {"High":"#10b981","Medium":"#f59e0b","Low":"#ef4444"}
-                fig = px.bar(ac_lvl, x="Activity", y="Rate", color="Activity",
-                             color_discrete_map=clr_map, text=ac_lvl["Rate"].map("{:.1%}".format))
-                fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
-                fig.update_layout(showlegend=False)
-                st.plotly_chart(sf(fig,"Churn by Account Activity Level"), use_container_width=True)
-
-        # Credit Score vs Churn scatter
-        d2 = df.copy()
-        d2["AG"] = pd.cut(d2["Age"],[18,25,35,45,55,65,100],
-                          labels=["18–24","25–34","35–44","45–54","55–64","65+"],right=False)
-        ag = d2.groupby("AG", observed=True)["Churn"].mean().reset_index()
-        ag.columns = ["Age Group","Churn Rate"]
-        fig = px.line(ag, x="Age Group", y="Churn Rate", markers=True,
-                      color_discrete_sequence=["#00d4ff"])
-        fig.update_traces(line_width=2.5, marker_size=9)
-        fig.add_hline(y=df["Churn"].mean(), line_dash="dot", line_color="#f59e0b",
-                      annotation_text="Overall Avg", annotation_font_color="#f59e0b")
-        st.plotly_chart(sf(fig,"Churn Rate by Age Group", 300), use_container_width=True)
+    c1, c2 = st.columns(2)
+    with c1:
+        products = df.groupby("NumOfProducts")["Churn"].mean().reset_index()
+        products["Products"] = products["NumOfProducts"].astype(str)
+        fig = px.bar(
+            products, x="Products", y="Churn",
+            color_discrete_sequence=["#00d4ff"],
+            text=products["Churn"].map("{:.1%}".format),
+        )
+        fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
+        fig.update_layout(yaxis_title="Customers who left", xaxis_title="Products held")
+        st.plotly_chart(sf(fig, "Likelihood to Leave by Products Held"), use_container_width=True)
+    with c2:
+        activity = df.groupby("IsActiveMember")["Churn"].mean().reset_index()
+        activity["Status"] = activity["IsActiveMember"].map({0: "Less active", 1: "Active"})
+        fig = px.bar(
+            activity, x="Status", y="Churn", color="Status",
+            color_discrete_map={"Active": "#10b981", "Less active": "#f59e0b"},
+            text=activity["Churn"].map("{:.1%}".format),
+        )
+        fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
+        fig.update_layout(
+            showlegend=False,
+            yaxis_title="Customers who left",
+            xaxis_title="Account activity",
+        )
+        st.plotly_chart(sf(fig, "Likelihood to Leave by Account Activity"), use_container_width=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  SEGMENTATION
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_segmentation(df):
-    page_header("🧩", "Customer Segmentation")
-    st.caption("K-Means (k=5) clusters customers into 5 behavioural archetypes. PCA used for 2D visualisation.")
+    page_header("🧩", "Customer Groups")
+    st.caption("Understand common customer needs and see a suggested retention action for each group.")
 
-    with st.spinner("Loading segmentation model…"):
-        labels, X_pca, summary = get_seg_data(df)
+    with st.spinner("Loading customer groups…"):
+        summary = get_seg_data(df)
 
-    # Segment summary cards
-    for col, (seg_id, meta) in zip(st.columns(5), SEGMENT_META.items()):
-        row  = summary[summary["Segment"] == seg_id]
-        cnt  = int(row["Count"].values[0])  if not row.empty else 0
-        rate = f"{row['ChurnRate'].values[0]:.1%}" if not row.empty else "–"
-        col.markdown(f"""
-<div class="cg-card" style="text-align:center;padding:0.95rem;border-top:2px solid {meta['color']}">
-  <div style="font-size:1.5rem">{meta['icon']}</div>
-  <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:0.78rem;
-       color:{meta['color']};margin:0.2rem 0">{meta['name']}</div>
-  <div style="font-family:'Outfit',sans-serif;font-size:1.4rem;font-weight:800">{cnt:,}</div>
-  <div style="font-size:0.68rem;color:#6b80a0">customers</div>
-  <div style="font-size:0.75rem;color:#ef4444;margin-top:0.15rem">{rate} churn</div>
-</div>""", unsafe_allow_html=True)
-
-    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
-
-    # Charts
-    c1, c2 = st.columns([1, 1.2])
-    with c1:
-        sc = summary[["SegmentName","ChurnRate","Count"]].sort_values("ChurnRate", ascending=False)
-        clr_map = {m["name"]: m["color"] for m in SEGMENT_META.values()}
-        fig = px.bar(sc, x="SegmentName", y="ChurnRate", color="SegmentName",
-                     color_discrete_map=clr_map, text=sc["ChurnRate"].map("{:.1%}".format))
-        fig.update_traces(textposition="outside", textfont_color="#e8f0ff")
-        fig.update_layout(showlegend=False)
-        fig.update_xaxes(tickangle=-15)
-        st.plotly_chart(sf(fig,"Churn Rate by Segment", 380), use_container_width=True)
-
-    with c2:
-        # PCA scatter plot
-        pca_df = pd.DataFrame(X_pca, columns=["PC1","PC2"])
-        pca_df["Segment"] = [SEGMENT_META.get(l,{}).get("name",f"Cluster {l}") for l in labels]
-        pca_df["Churn"] = df["Churn"].values[:len(pca_df)]
-        fig = px.scatter(pca_df.sample(min(1500,len(pca_df)), random_state=42),
-                         x="PC1", y="PC2", color="Segment",
-                         color_discrete_map=clr_map, opacity=0.65, size_max=5,
-                         hover_data={"PC1":False,"PC2":False,"Segment":True})
-        fig.update_traces(marker_size=4)
-        st.plotly_chart(sf(fig,"PCA Cluster Visualisation", 380), use_container_width=True)
-
-    # Segment profile cards
-    st.markdown("##### Segment Profiles")
-    for col, (seg_id, meta) in zip(st.columns(5), SEGMENT_META.items()):
-        col.markdown(f"""
-<div class="seg-card" style="border-top:3px solid {meta['color']}">
+    groups = list(SEGMENT_META.items())
+    for start in range(0, len(groups), 3):
+        cols = st.columns(3)
+        for col, (seg_id, meta) in zip(cols, groups[start:start + 3]):
+            row = summary[summary["Segment"] == seg_id]
+            count = int(row["Count"].values[0]) if not row.empty else 0
+            rate = f"{row['ChurnRate'].values[0]:.1%}" if not row.empty else "–"
+            col.markdown(f"""
+<div class="cg-card" style="border-top:3px solid {meta['color']}">
   <div style="font-size:1.5rem;margin-bottom:0.2rem">{meta['icon']}</div>
-  <div class="seg-name" style="color:{meta['color']}">{meta['name']}</div>
-  <div class="seg-desc">{meta['description']}</div>
-  <div class="seg-action">→ {meta['action']}</div>
-</div>""", unsafe_allow_html=True)
-
-    # Segment stats table
-    with st.expander("📋 Detailed Segment Statistics"):
-        disp = summary.rename(columns={
-            "SegmentName":"Segment","Count":"Customers","ChurnRate":"Churn Rate",
-            "AvgAge":"Avg Age","AvgBalance":"Avg Balance ($)",
-            "AvgSalary":"Avg Salary ($)","AvgProducts":"Avg Products",
-            "AvgTenure":"Avg Tenure","ActivePct":"Active %"
-        })
-        st.dataframe(disp.drop(columns=["Segment"],errors="ignore"), use_container_width=True)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  MODEL PERFORMANCE
-# ═══════════════════════════════════════════════════════════════════════════════
-def page_model_performance(results, best_name, model, scaler, feature_names):
-    page_header("🏆", "Model Performance")
-    if results is None:
-        st.warning("Run `python train_model.py` first.")
-        return
-
-    mres = {k:v for k,v in results.items() if not k.startswith("_")}
-    br   = mres.get(best_name, list(mres.values())[0])
-
-    # Active model banner
-    st.markdown(f"""
-<div style="background:rgba(0,212,255,0.06);border:1px solid rgba(0,212,255,0.22);
-     border-radius:14px;padding:1.1rem 1.4rem;margin-bottom:1rem;
-     display:flex;align-items:center;gap:1rem">
-  <div style="font-size:2rem">🤖</div>
-  <div>
-    <div style="font-family:'Outfit',sans-serif;font-weight:800;font-size:1.1rem;color:#00d4ff">
-      {best_name}
-    </div>
-    <div style="font-size:0.78rem;color:#6b80a0;margin-top:0.2rem">
-      Active prediction model &nbsp;·&nbsp; Trained on banking churn dataset &nbsp;·&nbsp;
-      Selected for highest AUC-ROC on held-out test set
-    </div>
-  </div>
-</div>""", unsafe_allow_html=True)
-
-    # 4 Metric cards
-    metrics = [
-        ("Accuracy",  br["accuracy"],  "#00d4ff",
-         "Correct predictions for all tested customers."),
-        ("Precision", br["precision"], "#7c3aed",
-         "Proportion of churn alerts that are correct."),
-        ("Recall",    br["recall"],    "#f59e0b",
-         "Share of actual churners correctly identified."),
-        ("F1 Score",  br["f1"],        "#10b981",
-         "Harmonic mean of Precision & Recall."),
-    ]
-    for col, (label, val, clr, desc) in zip(st.columns(4), metrics):
-        col.markdown(f"""
-<div class="cg-card" style="text-align:center">
-  <div class="cg-card-title">{label}</div>
-  <div class="cg-card-value" style="color:{clr}">{val:.2%}</div>
-  <div style="font-size:0.7rem;color:#6b80a0;margin-top:0.4rem;line-height:1.45">{desc}</div>
-</div>""", unsafe_allow_html=True)
-
-    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
-
-    # All-model comparison table
-    if len(mres) > 1:
-        st.markdown("##### 📊 All Models Comparison")
-        rows = []
-        for name, res in mres.items():
-            rows.append({
-                "Model": f"{'⭐ ' if name == best_name else ''}{name}",
-                "Accuracy":  f"{res['accuracy']:.4f}",
-                "Precision": f"{res['precision']:.4f}",
-                "Recall":    f"{res['recall']:.4f}",
-                "F1 Score":  f"{res['f1']:.4f}",
-                "AUC-ROC":   f"{res.get('roc_auc', res.get('auc',0)):.4f}" if "roc_auc" in res or "auc" in res else "—",
-            })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-    # Feature importance chart
-    fi_df = get_feature_importances(model, feature_names)
-    if fi_df is not None:
-        display_names = get_feature_display_names()
-        fi_top = fi_df.head(12).copy()
-        fi_top["label"] = fi_top["feature"].map(lambda x: display_names.get(x, x))
-        fig = go.Figure(go.Bar(
-            x=fi_top["importance"][::-1], y=fi_top["label"][::-1],
-            orientation="h",
-            marker=dict(color=fi_top["importance"][::-1],
-                        colorscale=[[0,"#7c3aed"],[0.5,"#00d4ff"],[1,"#00ffaa"]]),
-            text=fi_top["importance"][::-1].map("{:.4f}".format),
-            textposition="outside", textfont_color="#e8f0ff",
-        ))
-        st.plotly_chart(sf(fig,"🔍 Feature Importances (Active Model)", 420), use_container_width=True)
-
-    # How it works callout
-    st.markdown(f"""
-<div style="background:rgba(14,22,44,0.85);border:1px solid rgba(0,212,255,0.15);
-     border-radius:14px;padding:1.1rem 1.4rem">
-  <div style="font-family:'Outfit',sans-serif;font-weight:700;font-size:0.85rem;
-       color:#e8f0ff;margin-bottom:0.5rem">How {best_name} Works</div>
-  <div style="font-size:0.8rem;color:#b0c4de;line-height:1.65">
-    <b style="color:#00d4ff">{best_name}</b> is a supervised classification algorithm trained on
-    historical banking records. Given a customer's demographics, financial profile, and behavioural
-    signals, it outputs a <b style="color:#e8f0ff">churn probability between 0% and 100%</b>.
-    Customers above the 50% threshold are flagged as at-risk, enabling the retention team to intervene
-    proactively. The model was evaluated on a held-out test set it has never seen during training.
-  </div>
+  <div style="font-family:'Outfit',sans-serif;font-weight:700;color:{meta['color']}">{meta['name']}</div>
+  <div style="font-size:0.8rem;color:#6b80a0;margin-top:0.35rem">{count:,} customers · {rate} have left</div>
+  <div style="font-size:0.82rem;color:#b0c4de;line-height:1.5;margin-top:0.65rem">{meta['description']}</div>
+  <div style="font-size:0.8rem;color:#00d4aa;margin-top:0.65rem">Suggested action: {meta['action']}</div>
 </div>""", unsafe_allow_html=True)
 
 
@@ -1274,12 +998,12 @@ _RULE_INSIGHTS = [
     ("🎯", "Multi-Factor Risk", "The highest-risk customers typically combine: Age 45-65 + Germany + 1 product + Inactive status. Customers matching all 4 factors should be escalated immediately to a Senior Relationship Manager."),
 ]
 
-def page_ai_assistant(df, model, scaler, feature_names, best_name, results):
-    page_header("🤖", "AI Risk Assistant")
-    st.caption("Data-driven churn insights powered by your trained ML model and dataset analysis.")
+def page_ai_assistant(df, model, scaler, feature_names, best_name):
+    page_header("🤖", "Customer Insights")
+    st.caption("Practical customer trends and retention ideas based on the available account data.")
 
     # Local insights — always available
-    st.markdown("### 💡 Model-Driven Insights")
+    st.markdown("### 💡 Retention Insights")
     cr = df["Churn"].mean()
 
     for i in range(0, len(_RULE_INSIGHTS), 2):
@@ -1297,7 +1021,7 @@ def page_ai_assistant(df, model, scaler, feature_names, best_name, results):
 </div>""", unsafe_allow_html=True)
 
     # Live risk stats from dataset
-    st.markdown("### 📈 Live Portfolio Risk Stats")
+    st.markdown("### 📈 Portfolio Snapshot")
     high_risk_geo = df.groupby("Geography")["Churn"].mean().idxmax()
     high_risk_geo_rate = df.groupby("Geography")["Churn"].mean().max()
     single_prod_cr = df[df["NumOfProducts"]==1]["Churn"].mean()
@@ -1309,16 +1033,6 @@ def page_ai_assistant(df, model, scaler, feature_names, best_name, results):
     c2.markdown(kpi_card("📦", f"{single_prod_cr:.1%}",    "1-Product Churn Rate",  "#f97316"), unsafe_allow_html=True)
     c3.markdown(kpi_card("📱", f"{inactive_cr:.1%}",       "Inactive Member Churn", "#f59e0b"), unsafe_allow_html=True)
     c4.markdown(kpi_card("👴", f"{senior_cr:.1%}",         "Senior (55+) Churn",    "#7c3aed"), unsafe_allow_html=True)
-
-    if results:
-        mres = {k:v for k,v in results.items() if not k.startswith("_")}
-        br   = mres.get(best_name, list(mres.values())[0])
-        st.markdown("### 🤖 Active Model Stats")
-        s1, s2, s3, s4 = st.columns(4)
-        s1.markdown(kpi_card("🎯", f"{br['accuracy']:.2%}", "Model Accuracy", "#00d4ff"), unsafe_allow_html=True)
-        s2.markdown(kpi_card("📡", f"{br['recall']:.2%}",   "Churn Recall",   "#10b981"), unsafe_allow_html=True)
-        s3.markdown(kpi_card("🏅", f"{br['f1']:.2%}",       "F1 Score",       "#7c3aed"), unsafe_allow_html=True)
-        s4.markdown(kpi_card("🔬", best_name,                "Active Model",   "#f59e0b"), unsafe_allow_html=True)
 
     # Optional Anthropic chatbot
     st.markdown("---")
@@ -1339,8 +1053,7 @@ def page_ai_assistant(df, model, scaler, feature_names, best_name, results):
     if ak:
         _SYS = (
             "You are ChurnGuard AI Assistant — an expert banking analytics advisor. "
-            "You specialise in churn prediction models, banking customer behaviour, "
-            "retention strategy design, and interpreting ML metrics (AUC-ROC, F1, precision/recall). "
+            "You specialise in banking customer behaviour and practical retention strategies. "
             "Be concise, professional, and data-driven. Use bullet points where appropriate. "
             "Never invent statistics. If asked about a customer's prediction, use provided context."
         )
@@ -1348,9 +1061,9 @@ def page_ai_assistant(df, model, scaler, feature_names, best_name, results):
         qp_cols = st.columns(4)
         prompts = [
             "What factors most drive churn?",
-            "Explain AUC-ROC in simple terms.",
+            "How should we prioritize retention outreach?",
             "Best retention for high-risk seniors?",
-            "How does K-Means segment customers?",
+            "Which customer groups need the most attention?",
         ]
         for col, prompt in zip(qp_cols, prompts):
             if col.button(prompt[:30]+"…", use_container_width=True):
@@ -1401,13 +1114,13 @@ def page_ai_assistant(df, model, scaler, feature_names, best_name, results):
 #  PREDICTION HISTORY
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_history():
-    page_header("📋", "Prediction History")
+    page_header("📋", "Recent Checks")
     history = st.session_state.prediction_history
     if not history:
-        st.info("No predictions yet. Go to **🔮 Predict** to get started.")
+        st.info("No customer checks yet. Go to **🔮 Predict** to get started.")
         return
 
-    st.caption(f"{len(history)} prediction(s) this session")
+    st.caption(f"{len(history)} customer check(s) this session")
     rows = [{
         "Timestamp":   h["timestamp"],
         "Age":         h["customer"]["Age"],
@@ -1416,23 +1129,23 @@ def page_history():
         "Credit Score":h["customer"]["CreditScore"],
         "Balance":     f"${h['customer']['Balance']:,.0f}",
         "Products":    h["customer"]["NumOfProducts"],
-        "Segment":     h.get("segment","–"),
-        "Churn Prob":  f"{h['probability']:.1%}",
-        "Risk":        h["risk_category"],
-        "Predicted":   "YES ⚠️" if h["label"] else "NO ✅",
+        "Customer Group": h.get("segment","–"),
+        "Likelihood to Leave": f"{h['probability']:.1%}",
+        "Risk Level":  {"High Risk": "High", "Medium Risk": "Moderate", "Low Risk": "Low"}.get(h["risk_category"], h["risk_category"]),
+        "May Leave":   "Yes ⚠️" if h["label"] else "No ✅",
     } for h in reversed(history)]
 
     hist_df = pd.DataFrame(rows)
     st.dataframe(hist_df, use_container_width=True, height=380)
 
     if len(history) >= 3:
-        rc = hist_df["Risk"].value_counts().reset_index()
-        rc.columns = ["Risk","Count"]
-        fig = px.pie(rc, values="Count", names="Risk", color="Risk", hole=0.52,
-                     color_discrete_map={"Low Risk":"#10b981","Medium Risk":"#f59e0b","High Risk":"#ef4444"})
+        rc = hist_df["Risk Level"].value_counts().reset_index()
+        rc.columns = ["Risk Level","Count"]
+        fig = px.pie(rc, values="Count", names="Risk Level", color="Risk Level", hole=0.52,
+                     color_discrete_map={"Low":"#10b981","Moderate":"#f59e0b","High":"#ef4444"})
         c1, _ = st.columns([1, 1])
         with c1:
-            st.plotly_chart(sf(fig,"Session Risk Distribution", 280), use_container_width=True)
+            st.plotly_chart(sf(fig,"Risk Levels Across Recent Checks", 280), use_container_width=True)
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -1490,9 +1203,9 @@ def page_admin(df, results, best_name):
         st.markdown("##### Dataset Statistics")
         s1, s2, s3, s4 = st.columns(4)
         s1.metric("Total Records", f"{len(df):,}")
-        s2.metric("Total Features", f"{len(df.columns)}")
+        s2.metric("Customer Details Tracked", f"{len(df.columns)}")
         s3.metric("Churn Rate", f"{df['Churn'].mean():.2%}")
-        s4.metric("Missing Values", str(df.isnull().sum().sum()))
+        s4.metric("Incomplete Fields", str(df.isnull().sum().sum()))
 
         st.markdown("##### Model Registry")
         if results:
@@ -1523,7 +1236,7 @@ def page_admin(df, results, best_name):
 # ═══════════════════════════════════════════════════════════════════════════════
 def page_alerts(df):
     page_header("🔔", "Smart Alerts")
-    st.caption("Automated alerts generated from real-time dataset analysis.")
+    st.caption("Alerts based on the current customer data.")
 
     alerts = []
     cr = df["Churn"].mean()
@@ -1617,7 +1330,7 @@ def build_sidebar(best_name):
        -webkit-background-clip:text;-webkit-text-fill-color:transparent">
     ChurnGuard AI
   </div>
-  <div style="font-size:0.67rem;color:#6b80a0;margin-top:2px">Banking Intelligence Platform</div>
+  <div style="font-size:0.67rem;color:#6b80a0;margin-top:2px">Customer Retention Dashboard</div>
 </div>
 <hr style="border:none;border-top:1px solid rgba(0,212,255,0.12);margin:0.5rem 0 0.8rem">
 """, unsafe_allow_html=True)
@@ -1628,11 +1341,10 @@ def build_sidebar(best_name):
             "🏠  Overview",
             "🔮  Predict",
             "🔍  Customer Intelligence",
-            "📊  Analytics",
-            "🧩  Segmentation",
-            "🏆  Model Performance",
-            "🤖  AI Risk Assistant",
-            "📋  Prediction History",
+            "📊  Churn Insights",
+            "🧩  Customer Groups",
+            "🤖  Customer Insights",
+            "📋  Recent Checks",
         ]
         if is_admin:
             nav_items += ["⚙️  Admin Settings", "🔔  Smart Alerts"]
@@ -1650,7 +1362,7 @@ def build_sidebar(best_name):
   <div style="color:#6b80a0;font-size:0.63rem;text-transform:uppercase;
        letter-spacing:0.09em;margin-bottom:3px">Active Model</div>
   <div style="color:#00d4ff;font-weight:600">{best_name}</div>
-  <div style="color:#6b80a0;font-size:0.66rem;margin-top:2px">⭐ Best AUC on Test Set</div>
+  <div style="color:#6b80a0;font-size:0.66rem;margin-top:2px">⭐ Selected for reliable predictions</div>
 </div>
 <div style="background:rgba(124,58,237,0.07);border:1px solid rgba(124,58,237,0.18);
      border-radius:10px;padding:0.7rem;font-size:0.76rem;margin-bottom:0.5rem">
@@ -1676,11 +1388,8 @@ def build_sidebar(best_name):
 def render_footer():
     st.markdown("""
 <div class="cg-footer">
-  🛡️ ChurnGuard AI &nbsp;·&nbsp; AI-Powered Banking Intelligence Platform<br>
-  <span style="font-size:0.66rem">
-    Streamlit &nbsp;·&nbsp; Scikit-learn &nbsp;·&nbsp; XGBoost &nbsp;·&nbsp; Plotly &nbsp;·&nbsp; ReportLab
-    &nbsp;·&nbsp; © 2024 · All rights reserved
-  </span>
+  🛡️ ChurnGuard AI &nbsp;·&nbsp; Customer Retention Dashboard<br>
+  <span style="font-size:0.66rem">Customer insights and retention support &nbsp;·&nbsp; © 2024</span>
 </div>""", unsafe_allow_html=True)
 
 
@@ -1714,8 +1423,7 @@ def main():
     elif page.startswith("🔍"):  page_customer_intelligence(df, model, scaler, feature_names)
     elif page.startswith("📊"):  page_analytics(df)
     elif page.startswith("🧩"):  page_segmentation(df)
-    elif page.startswith("🏆"):  page_model_performance(results, best_name, model, scaler, feature_names)
-    elif page.startswith("🤖"):  page_ai_assistant(df, model, scaler, feature_names, best_name, results)
+    elif page.startswith("🤖"):  page_ai_assistant(df, model, scaler, feature_names, best_name)
     elif page.startswith("📋"):  page_history()
     elif page.startswith("⚙️"):  page_admin(df, results, best_name)
     elif page.startswith("🔔"):  page_alerts(df)
@@ -1725,4 +1433,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+     main()
